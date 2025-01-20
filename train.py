@@ -97,7 +97,6 @@ class ModelTrainer:
         )
         
         # Training state - start from step 1
-        self.current_epoch = 0
         self.global_step = 1  # Changed from 0 to 1
         
         # Move model to device
@@ -121,7 +120,6 @@ class ModelTrainer:
     def save_checkpoint(self):
         """Save a checkpoint of the training state"""
         checkpoint = {
-            'epoch': self.current_epoch,
             'global_step': self.global_step,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
@@ -162,10 +160,9 @@ class ModelTrainer:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             
             # Restore training state
-            self.current_epoch = checkpoint['epoch']
             self.global_step = checkpoint['global_step']
             
-            logger.info(f"Resumed training from epoch {self.current_epoch}, step {self.global_step}")
+            logger.info(f"Resumed training from step {self.global_step}")
             return True
             
         except Exception as e:
@@ -192,18 +189,15 @@ class ModelTrainer:
         self.model.train()
 
     def train_epoch(self, target_steps=None):
-        """Train for one epoch or until target steps"""
+        """Train until target steps"""
         self.model.train()
         total_loss = 0
-        steps_this_epoch = 0
+        steps_this_batch = 0
         
         for batch_idx, batch in enumerate(self.train_dataloader):
-            logger.debug(f"Processing batch at step {self.global_step}")  # Debug log
-            
             # Check if we've reached target steps
             if target_steps and self.global_step > target_steps:
-                logger.info(f"Reached target steps ({target_steps}). Stopping training.")
-                return total_loss / steps_this_epoch if steps_this_epoch > 0 else 0
+                break
             
             # Move batch to device
             input_ids = batch['input_ids'].to(self.device)
@@ -232,37 +226,23 @@ class ModelTrainer:
             if self.global_step % 500 == 0:
                 self.generate_sample_text()
             
-            # Increment steps
-            old_step = self.global_step  # Debug
+            # Increment step
             self.global_step += 1
-            logger.debug(f"Incremented step from {old_step} to {self.global_step}")  # Debug log
-            steps_this_epoch += 1
-            
-            # Return early if target steps reached
-            if target_steps and self.global_step > target_steps:
-                break
+            steps_this_batch += 1
         
-        logger.debug(f"Finished epoch at step {self.global_step}")  # Debug log
-        return total_loss / steps_this_epoch
+        return total_loss / steps_this_batch if steps_this_batch > 0 else 0
 
     def train(self, num_epochs: int, target_steps: int = None):
-        """Train the model for specified epochs or until target steps"""
-        logger.info(f"Starting training for {num_epochs} epochs or until step {target_steps}")
+        """Train the model until target steps"""
+        logger.info(f"Starting training until step {target_steps}")
         
-        for epoch in range(self.current_epoch, num_epochs):
-            logger.debug(f"Before epoch start: step {self.global_step}")  # Debug log
-            self.current_epoch = epoch
-            logger.info(f"Starting epoch {epoch + 1}/{num_epochs} (step {self.global_step})")
-            
-            train_loss = self.train_epoch(target_steps)
-            logger.debug(f"After train_epoch: step {self.global_step}")  # Debug log
-            
-            logger.info(f"Epoch {epoch + 1} completed. Average training loss: {train_loss:.4f}")
-            
+        while True:
             # Check if we've reached target steps
-            if target_steps and self.global_step > target_steps:  # Changed from >= to >
+            if target_steps and self.global_step > target_steps:
                 logger.info(f"Reached target steps ({target_steps}). Stopping training.")
                 break
+            
+            train_loss = self.train_epoch(target_steps)
 
 def main():
     # Create model and tokenizer
@@ -300,20 +280,20 @@ def main():
         target_steps=5000
     )
     
-    # Check if we're continuing from 5000 steps
+    # Check if we're continuing training
     if trainer.load_latest_checkpoint():
         if trainer.global_step > 5000:
             # Continue for 50 more steps
-            logger.info("Continuing training from step 5000 for 50 more steps")
-            trainer.train(num_epochs=1000, target_steps=5050)
+            logger.info("Continuing training for 50 more steps")
+            trainer.train(target_steps=5050)
         else:
             # Continue to 5000 steps
             logger.info("Continuing training until step 5000")
-            trainer.train(num_epochs=1000, target_steps=5000)
+            trainer.train(target_steps=5000)
     else:
         # Start fresh training to 5000 steps
         logger.info("Starting fresh training to 5000 steps")
-        trainer.train(num_epochs=1000, target_steps=5000)
+        trainer.train(target_steps=5000)
 
 if __name__ == "__main__":
     main() 

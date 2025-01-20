@@ -232,7 +232,7 @@ class ModelTrainer:
         
         return total_loss / steps_this_batch if steps_this_batch > 0 else 0
 
-    def train(self, num_epochs: int, target_steps: int = None):
+    def train(self, target_steps: int = None):
         """Train the model until target steps"""
         logger.info(f"Starting training until step {target_steps}")
         

@@ -47,6 +47,7 @@ class LlamaAttention(nn.Module):
         self.hidden_size = hidden_size
         self.num_heads = num_attention_heads
         self.num_key_value_heads = num_key_value_heads
+        self.num_key_value_groups = self.num_heads // self.num_key_value_heads
         self.head_dim = hidden_size // num_attention_heads
         
         self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
@@ -70,14 +71,28 @@ class LlamaAttention(nn.Module):
         key_states = self.k_proj(hidden_states)
         value_states = self.v_proj(hidden_states)
         
-        query_states = query_states.view(batch_size, seq_length, self.num_heads, self.head_dim).transpose(1, 2)
-        key_states = key_states.view(batch_size, seq_length, self.num_key_value_heads, self.head_dim).transpose(1, 2)
-        value_states = value_states.view(batch_size, seq_length, self.num_key_value_heads, self.head_dim).transpose(1, 2)
+        # Reshape query states
+        query_states = query_states.view(
+            batch_size, seq_length, self.num_heads, self.head_dim
+        ).transpose(1, 2)
+        
+        # Reshape key and value states
+        key_states = key_states.view(
+            batch_size, seq_length, self.num_key_value_heads, self.head_dim
+        ).transpose(1, 2)
+        value_states = value_states.view(
+            batch_size, seq_length, self.num_key_value_heads, self.head_dim
+        ).transpose(1, 2)
+        
+        # Repeat key and value states to match number of query heads
+        key_states = key_states.repeat_interleave(self.num_key_value_groups, dim=1)
+        value_states = value_states.repeat_interleave(self.num_key_value_groups, dim=1)
         
         # Scaled dot-product attention
         attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) * self.scaling
         
         if attention_mask is not None:
+            attention_mask = attention_mask.view(batch_size, 1, 1, seq_length)
             attn_weights = attn_weights + attention_mask
             
         attn_weights = F.softmax(attn_weights, dim=-1)

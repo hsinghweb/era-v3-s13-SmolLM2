@@ -198,6 +198,8 @@ class ModelTrainer:
         steps_this_epoch = 0
         
         for batch_idx, batch in enumerate(self.train_dataloader):
+            logger.debug(f"Processing batch at step {self.global_step}")  # Debug log
+            
             # Check if we've reached target steps
             if target_steps and self.global_step > target_steps:
                 logger.info(f"Reached target steps ({target_steps}). Stopping training.")
@@ -231,13 +233,16 @@ class ModelTrainer:
                 self.generate_sample_text()
             
             # Increment steps
+            old_step = self.global_step  # Debug
             self.global_step += 1
+            logger.debug(f"Incremented step from {old_step} to {self.global_step}")  # Debug log
             steps_this_epoch += 1
             
             # Return early if target steps reached
             if target_steps and self.global_step > target_steps:
                 break
         
+        logger.debug(f"Finished epoch at step {self.global_step}")  # Debug log
         return total_loss / steps_this_epoch
 
     def train(self, num_epochs: int, target_steps: int = None):
@@ -245,10 +250,13 @@ class ModelTrainer:
         logger.info(f"Starting training for {num_epochs} epochs or until step {target_steps}")
         
         for epoch in range(self.current_epoch, num_epochs):
+            logger.debug(f"Before epoch start: step {self.global_step}")  # Debug log
             self.current_epoch = epoch
             logger.info(f"Starting epoch {epoch + 1}/{num_epochs} (step {self.global_step})")
             
             train_loss = self.train_epoch(target_steps)
+            logger.debug(f"After train_epoch: step {self.global_step}")  # Debug log
+            
             logger.info(f"Epoch {epoch + 1} completed. Average training loss: {train_loss:.4f}")
             
             # Check if we've reached target steps

@@ -62,8 +62,9 @@ class ModelTrainer:
         max_length: int = 512,
         learning_rate: float = 3e-3,
         checkpoint_dir: str = "checkpoints",
-        checkpoint_interval: int = 100,
+        checkpoint_interval: int = 50,
         max_checkpoints: int = 3,
+        target_steps: int = 5000,  # Target steps for first training phase
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
     ):
         self.model = model
@@ -72,6 +73,7 @@ class ModelTrainer:
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_interval = checkpoint_interval
         self.max_checkpoints = max_checkpoints
+        self.target_steps = target_steps
         
         # Create checkpoint directory
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -171,13 +173,37 @@ class ModelTrainer:
             logger.error(f"Error loading checkpoint: {e}")
             return False
 
-    def train_epoch(self):
-        """Train for one epoch"""
+    def generate_sample_text(self, prompt="First Citizen:", max_length=100):
+        """Generate sample text to show model's current capabilities"""
+        self.model.eval()
+        with torch.no_grad():
+            input_ids = self.tokenizer.encode(prompt, return_tensors="pt").to(self.device)
+            outputs = self.model.generate(
+                input_ids,
+                max_length=max_length,
+                num_return_sequences=1,
+                temperature=0.7,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id
+            )
+            generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            logger.info(f"\nGenerated text at step {self.global_step}:")
+            logger.info(f"Prompt: {prompt}")
+            logger.info(f"Generated: {generated_text}\n")
+        self.model.train()
+
+    def train_epoch(self, target_steps=None):
+        """Train for one epoch or until target steps"""
         self.model.train()
         total_loss = 0
         steps_this_epoch = 0
         
         for batch_idx, batch in enumerate(self.train_dataloader):
+            # Check if we've reached target steps
+            if target_steps and self.global_step >= target_steps:
+                logger.info(f"Reached target steps ({target_steps}). Stopping training.")
+                return total_loss / steps_this_epoch if steps_this_epoch > 0 else 0
+            
             # Move batch to device
             input_ids = batch['input_ids'].to(self.device)
             labels = batch['labels'].to(self.device)
@@ -199,24 +225,31 @@ class ModelTrainer:
             self.global_step += 1
             steps_this_epoch += 1
             
-            # Log progress
+            # Log progress and generate sample
             if self.global_step % 100 == 0:
-                logger.info(f"Step {self.global_step} (epoch step {steps_this_epoch}): loss = {loss.item():.4f}")
+                logger.info(f"Step {self.global_step}: loss = {loss.item():.4f}")
                 self.save_checkpoint()
+            
+            if self.global_step % 500 == 0:
+                self.generate_sample_text()
         
-        logger.info(f"Epoch completed with {steps_this_epoch} steps")
         return total_loss / steps_this_epoch
 
-    def train(self, num_epochs: int):
-        """Train the model for the specified number of epochs"""
-        logger.info(f"Starting training for {num_epochs} epochs")
+    def train(self, num_epochs: int, target_steps: int = None):
+        """Train the model for specified epochs or until target steps"""
+        logger.info(f"Starting training for {num_epochs} epochs or until step {target_steps}")
         
         for epoch in range(self.current_epoch, num_epochs):
             self.current_epoch = epoch
-            logger.info(f"Starting epoch {epoch + 1}/{num_epochs}")
+            logger.info(f"Starting epoch {epoch + 1}/{num_epochs} (step {self.global_step})")
             
-            train_loss = self.train_epoch()
+            train_loss = self.train_epoch(target_steps)
             logger.info(f"Epoch {epoch + 1} completed. Average training loss: {train_loss:.4f}")
+            
+            # Check if we've reached target steps
+            if target_steps and self.global_step >= target_steps:
+                logger.info(f"Reached target steps ({target_steps}). Stopping training.")
+                break
 
 def main():
     # Create model and tokenizer
@@ -231,20 +264,30 @@ def main():
     trainer = ModelTrainer(
         model=model,
         tokenizer=tokenizer,
-        input_file="input.txt",  # Your input text file
+        input_file="input.txt",
         batch_size=4,
         max_length=512,
         learning_rate=3e-3,
         checkpoint_dir="checkpoints",
-        checkpoint_interval=100,
-        max_checkpoints=3
+        checkpoint_interval=50,
+        max_checkpoints=3,
+        target_steps=5000
     )
     
-    # Try to resume from latest checkpoint
-    trainer.load_latest_checkpoint()
-    
-    # Start training
-    trainer.train(num_epochs=10)
+    # Check if we're continuing from 5000 steps
+    if trainer.load_latest_checkpoint():
+        if trainer.global_step >= 5000:
+            # Continue for 50 more steps
+            logger.info("Continuing training from step 5000 for 50 more steps")
+            trainer.train(num_epochs=1000, target_steps=5050)  # Large epoch number, but will stop at 5050 steps
+        else:
+            # Continue to 5000 steps
+            logger.info("Continuing training until step 5000")
+            trainer.train(num_epochs=1000, target_steps=5000)
+    else:
+        # Start fresh training to 5000 steps
+        logger.info("Starting fresh training to 5000 steps")
+        trainer.train(num_epochs=1000, target_steps=5000)
 
 if __name__ == "__main__":
     main() 

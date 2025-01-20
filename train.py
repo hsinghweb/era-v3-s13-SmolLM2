@@ -256,6 +256,19 @@ def main():
     model = create_model(seed=42)
     tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M")
     
+    # Print model architecture and parameters
+    logger.info("Model Architecture:")
+    logger.info("-------------------")
+    logger.info(f"{model}")
+    logger.info("-------------------")
+    
+    # Calculate and print parameter count
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    logger.info(f"Total Parameters: {total_params:,}")
+    logger.info(f"Trainable Parameters: {trainable_params:,}")
+    logger.info("-------------------")
+    
     # Set pad token if not set
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
@@ -279,7 +292,7 @@ def main():
         if trainer.global_step >= 5000:
             # Continue for 50 more steps
             logger.info("Continuing training from step 5000 for 50 more steps")
-            trainer.train(num_epochs=1000, target_steps=5050)  # Large epoch number, but will stop at 5050 steps
+            trainer.train(num_epochs=1000, target_steps=5050)
         else:
             # Continue to 5000 steps
             logger.info("Continuing training until step 5000")

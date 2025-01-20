@@ -64,7 +64,7 @@ class ModelTrainer:
         checkpoint_dir: str = "checkpoints",
         checkpoint_interval: int = 50,
         max_checkpoints: int = 3,
-        target_steps: int = 5000,  # Target steps for first training phase
+        target_steps: int = 5000,
         device: str = "cuda" if torch.cuda.is_available() else "cpu"
     ):
         self.model = model
@@ -96,9 +96,9 @@ class ModelTrainer:
             weight_decay=0.1
         )
         
-        # Training state
+        # Training state - start from step 1
         self.current_epoch = 0
-        self.global_step = 0
+        self.global_step = 1  # Changed from 0 to 1
         
         # Move model to device
         self.model.to(device)
@@ -199,7 +199,7 @@ class ModelTrainer:
         
         for batch_idx, batch in enumerate(self.train_dataloader):
             # Check if we've reached target steps
-            if target_steps and self.global_step >= target_steps:
+            if target_steps and self.global_step > target_steps:  # Changed from >= to >
                 logger.info(f"Reached target steps ({target_steps}). Stopping training.")
                 return total_loss / steps_this_epoch if steps_this_epoch > 0 else 0
             
@@ -223,12 +223,12 @@ class ModelTrainer:
             total_loss += loss.item()
             steps_this_epoch += 1
             
-            # Log progress and save checkpoint before incrementing step
-            if (self.global_step + 1) % 50 == 0:  # Check next step
+            # Log progress and save checkpoint
+            if self.global_step % 50 == 0:  # Removed +1 since we start from 1
                 logger.info(f"Step {self.global_step}: loss = {loss.item():.4f}")
                 self.save_checkpoint()
             
-            if (self.global_step + 1) % 500 == 0:  # Check next step
+            if self.global_step % 500 == 0:  # Removed +1 since we start from 1
                 self.generate_sample_text()
             
             # Increment global step after logging and checkpointing
@@ -248,7 +248,7 @@ class ModelTrainer:
             logger.info(f"Epoch {epoch + 1} completed. Average training loss: {train_loss:.4f}")
             
             # Check if we've reached target steps
-            if target_steps and self.global_step >= target_steps:
+            if target_steps and self.global_step > target_steps:  # Changed from >= to >
                 logger.info(f"Reached target steps ({target_steps}). Stopping training.")
                 break
 
@@ -290,7 +290,7 @@ def main():
     
     # Check if we're continuing from 5000 steps
     if trainer.load_latest_checkpoint():
-        if trainer.global_step >= 5000:
+        if trainer.global_step > 5000:
             # Continue for 50 more steps
             logger.info("Continuing training from step 5000 for 50 more steps")
             trainer.train(num_epochs=1000, target_steps=5050)

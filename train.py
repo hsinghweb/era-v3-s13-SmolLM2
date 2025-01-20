@@ -115,7 +115,6 @@ class ModelTrainer:
             oldest_checkpoint = checkpoint_files.pop(0)
             try:
                 os.remove(oldest_checkpoint)
-                logger.info(f"Removed old checkpoint: {oldest_checkpoint}")
             except Exception as e:
                 logger.warning(f"Failed to remove checkpoint {oldest_checkpoint}: {e}")
 
@@ -222,16 +221,18 @@ class ModelTrainer:
             self.optimizer.zero_grad()
             
             total_loss += loss.item()
-            self.global_step += 1
             steps_this_epoch += 1
             
-            # Log progress and generate sample
-            if self.global_step % 100 == 0:
+            # Log progress and save checkpoint before incrementing step
+            if (self.global_step + 1) % 50 == 0:  # Check next step
                 logger.info(f"Step {self.global_step}: loss = {loss.item():.4f}")
                 self.save_checkpoint()
             
-            if self.global_step % 500 == 0:
+            if (self.global_step + 1) % 500 == 0:  # Check next step
                 self.generate_sample_text()
+            
+            # Increment global step after logging and checkpointing
+            self.global_step += 1
         
         return total_loss / steps_this_epoch
 

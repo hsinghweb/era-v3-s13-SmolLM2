@@ -191,13 +191,55 @@ class LlamaModel(nn.Module):
 class LlamaForCausalLM(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.config = config  # Store config for weight initialization
+        self.config = config
         self.model = LlamaModel(config)
         self.lm_head = nn.Linear(config["hidden_size"], config["vocab_size"], bias=False)
-        
-        # Initialize all weights from scratch
         self.init_weights_from_scratch()
+
+    def generate(
+        self,
+        input_ids: torch.LongTensor,
+        max_length: int = 100,
+        num_return_sequences: int = 1,
+        temperature: float = 0.7,
+        pad_token_id: int = None,
+        eos_token_id: int = None,
+    ) -> torch.LongTensor:
+        """Generate text using simple greedy decoding"""
+        batch_size = input_ids.shape[0]
+        current_length = input_ids.shape[1]
+        device = input_ids.device
         
+        # Initialize attention mask
+        attention_mask = torch.ones_like(input_ids)
+        
+        # Generate until max_length or eos token
+        while current_length < max_length:
+            # Get model outputs
+            outputs = self.model(input_ids, attention_mask=attention_mask)
+            next_token_logits = self.lm_head(outputs[:, -1, :])
+            
+            # Apply temperature
+            next_token_logits = next_token_logits / temperature
+            
+            # Get next token
+            next_tokens = torch.argmax(next_token_logits, dim=-1)
+            
+            # Append new tokens
+            input_ids = torch.cat([input_ids, next_tokens.unsqueeze(-1)], dim=-1)
+            attention_mask = torch.cat([
+                attention_mask,
+                torch.ones((batch_size, 1), device=device)
+            ], dim=-1)
+            
+            current_length += 1
+            
+            # Stop if eos token is generated
+            if eos_token_id is not None and (next_tokens == eos_token_id).any():
+                break
+        
+        return input_ids
+
     def init_weights_from_scratch(self):
         """Initialize all model weights from scratch using random initialization"""
         def _init_weights(module):

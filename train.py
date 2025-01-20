@@ -199,7 +199,7 @@ class ModelTrainer:
         
         for batch_idx, batch in enumerate(self.train_dataloader):
             # Check if we've reached target steps
-            if target_steps and self.global_step > target_steps:  # Changed from >= to >
+            if target_steps and self.global_step > target_steps:
                 logger.info(f"Reached target steps ({target_steps}). Stopping training.")
                 return total_loss / steps_this_epoch if steps_this_epoch > 0 else 0
             
@@ -221,18 +221,22 @@ class ModelTrainer:
             self.optimizer.zero_grad()
             
             total_loss += loss.item()
-            steps_this_epoch += 1
             
             # Log progress and save checkpoint
-            if self.global_step % 50 == 0:  # Removed +1 since we start from 1
+            if self.global_step % 50 == 0:
                 logger.info(f"Step {self.global_step}: loss = {loss.item():.4f}")
                 self.save_checkpoint()
             
-            if self.global_step % 500 == 0:  # Removed +1 since we start from 1
+            if self.global_step % 500 == 0:
                 self.generate_sample_text()
             
-            # Increment global step after logging and checkpointing
+            # Increment steps
             self.global_step += 1
+            steps_this_epoch += 1
+            
+            # Return early if target steps reached
+            if target_steps and self.global_step > target_steps:
+                break
         
         return total_loss / steps_this_epoch
 

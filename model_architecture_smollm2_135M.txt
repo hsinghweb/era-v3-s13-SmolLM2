@@ -24,7 +24,3 @@ LlamaForCausalLM(
   )
   (lm_head): Linear(in_features=576, out_features=49152, bias=False)
 )
-
-
-
-Trainable parameters: 134,515,008

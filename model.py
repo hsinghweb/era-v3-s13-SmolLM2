@@ -54,10 +54,12 @@ class LlamaAttention(nn.Module):
         self.num_key_value_groups = self.num_heads // self.num_key_value_heads
         self.head_dim = hidden_size // num_attention_heads
         
-        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)
-        self.k_proj = nn.Linear(hidden_size, self.head_dim * num_key_value_heads, bias=False)
-        self.v_proj = nn.Linear(hidden_size, self.head_dim * num_key_value_heads, bias=False)
-        self.o_proj = nn.Linear(hidden_size, hidden_size, bias=False)
+        # Modify projection sizes for grouped-query attention
+        self.q_proj = nn.Linear(hidden_size, hidden_size, bias=False)  # [576, 576]
+        # Key and value projections have reduced size due to head grouping
+        self.k_proj = nn.Linear(hidden_size, self.head_dim * num_key_value_heads, bias=False)  # [576, 192]
+        self.v_proj = nn.Linear(hidden_size, self.head_dim * num_key_value_heads, bias=False)  # [576, 192]
+        self.o_proj = nn.Linear(hidden_size, hidden_size, bias=False)  # [576, 576]
         
         self.scaling = self.head_dim ** -0.5
 
@@ -291,12 +293,12 @@ class LlamaForCausalLM(nn.Module):
 
 # Model configuration from YAML
 MODEL_CONFIG = {
-    "vocab_size": 49152,
-    "hidden_size": 576,
-    "num_attention_heads": 9,
-    "num_key_value_heads": 3,
-    "num_hidden_layers": 30,
-    "intermediate_size": 1536,
+    "vocab_size": 49152,        # Embedding params: 49152 * 576 = 28,311,552
+    "hidden_size": 576,         # Hidden dimension
+    "num_attention_heads": 9,    # Total attention heads
+    "num_key_value_heads": 3,   # Grouped-query attention heads
+    "num_hidden_layers": 30,    # Number of transformer layers
+    "intermediate_size": 1536,  # MLP intermediate size
     "hidden_act": "silu",
     "max_position_embeddings": 2048,
     "initializer_range": 0.041666666666666664,
@@ -306,21 +308,26 @@ MODEL_CONFIG = {
 }
 
 def create_model(seed: int = None):
-    """Creates and returns a fresh SmolLM2-135M model instance with random initialization
+    """Creates and returns a fresh SmolLM2-135M model instance
     
-    Args:
-        seed (int, optional): Random seed for weight initialization
-        
-    Returns:
-        LlamaForCausalLM: A freshly initialized model
+    Parameter count breakdown:
+    - Embedding layer:        28,311,552  (vocab_size * hidden_size)
+    - 30 Decoder layers:     105,902,080  (30 * [
+        - Self-attention:     1,327,104   (4 * hidden_size * hidden_size)
+        - MLP:               2,203,136    (2 * hidden_size * intermediate_size + intermediate_size * hidden_size)
+        - Layer norms:          1,152     (2 * hidden_size)
+      ])
+    - Final norm:                  576    (hidden_size)
+    - LM head:                 28,311,552 (hidden_size * vocab_size) [tied with embeddings]
+    Total:                    134,515,008 parameters
     """
     if seed is not None:
         torch.manual_seed(seed)
         
     model = LlamaForCausalLM(MODEL_CONFIG)
     
-    # Calculate and print total parameters
+    # Calculate and verify parameter count
     total_params = sum(p.numel() for p in model.parameters())
-    print(f"Created model with {total_params:,} parameters")
+    assert total_params == 134_515_008, f"Expected 134,515,008 parameters but got {total_params}"
     
     return model 

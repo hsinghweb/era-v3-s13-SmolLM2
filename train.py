@@ -245,28 +245,61 @@ class ModelTrainer:
             train_loss = self.train_epoch(target_steps)
 
 def main():
+    # Load reference architecture
+    with open('model_architecture_smollm2_135M.txt', 'r') as f:
+        reference_architecture = f.read().strip()
+    
     # Create model and tokenizer
     model = create_model(seed=42)
     tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M")
     
-    # Print model architecture and parameters
-    logger.info("Model Architecture:")
+    # Get current model architecture as string
+    current_architecture = str(model).strip()
+    
+    # Print and compare architectures
+    logger.info("Checking Model Architecture...")
     logger.info("-------------------")
-    logger.info(f"{model}")
+    logger.info("Current Model Architecture:")
+    logger.info(current_architecture)
     logger.info("-------------------")
     
-    # Calculate and print parameter count
+    # Compare architectures
+    if current_architecture == reference_architecture:
+        logger.info("✓ Model architecture exactly matches reference architecture")
+    else:
+        logger.error("✗ Model architecture differs from reference!")
+        # Find differences
+        current_lines = current_architecture.split('\n')
+        reference_lines = reference_architecture.split('\n')
+        
+        for i, (curr, ref) in enumerate(zip(current_lines, reference_lines)):
+            if curr != ref:
+                logger.error(f"Line {i+1} differs:")
+                logger.error(f"Expected: {ref}")
+                logger.error(f"Got:      {curr}")
+        
+        raise ValueError("Model architecture does not match reference architecture")
+    
+    # Print parameter counts
     total_params = sum(p.numel() for p in model.parameters())
     trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    target_params = 134_515_008  # From model_architecture_smollm2_135M.txt
+    
+    logger.info("Parameter Counts:")
     logger.info(f"Total Parameters: {total_params:,}")
     logger.info(f"Trainable Parameters: {trainable_params:,}")
+    logger.info(f"Target Parameters: {target_params:,}")
+    
+    if total_params != target_params:
+        raise ValueError(f"Parameter count mismatch! Expected {target_params:,} but got {total_params:,}")
+    
+    logger.info("✓ Parameter count matches reference")
     logger.info("-------------------")
     
-    # Set pad token if not set
+    # Continue with training setup...
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     
-    # Initialize trainer
     trainer = ModelTrainer(
         model=model,
         tokenizer=tokenizer,
@@ -283,15 +316,12 @@ def main():
     # Check if we're continuing training
     if trainer.load_latest_checkpoint():
         if trainer.global_step > 5000:
-            # Continue for 50 more steps
             logger.info("Continuing training for 50 more steps")
             trainer.train(target_steps=5050)
         else:
-            # Continue to 5000 steps
             logger.info("Continuing training until step 5000")
             trainer.train(target_steps=5000)
     else:
-        # Start fresh training to 5000 steps
         logger.info("Starting fresh training to 5000 steps")
         trainer.train(target_steps=5000)
 

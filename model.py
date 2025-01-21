@@ -9,11 +9,15 @@ class LlamaRMSNorm(nn.Module):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(hidden_size))
         self.eps = eps
+        self.hidden_size = hidden_size
 
     def forward(self, x):
         variance = x.pow(2).mean(-1, keepdim=True)
         x = x * torch.rsqrt(variance + self.eps)
         return self.weight * x
+
+    def __repr__(self):
+        return f'LlamaRMSNorm(({self.hidden_size},), eps={self.eps})'
 
 class LlamaRotaryEmbedding(nn.Module):
     def __init__(self, dim: int, max_position_embeddings: int = 2048, base: int = 10000):
@@ -116,7 +120,7 @@ class LlamaMLP(nn.Module):
         self.gate_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
         self.up_proj = nn.Linear(hidden_size, intermediate_size, bias=False)
         self.down_proj = nn.Linear(intermediate_size, hidden_size, bias=False)
-        self.act_fn = F.silu
+        self.act_fn = nn.SiLU()
 
     def forward(self, x):
         return self.down_proj(self.act_fn(self.gate_proj(x)) * self.up_proj(x))

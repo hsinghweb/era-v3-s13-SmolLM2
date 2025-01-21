@@ -310,7 +310,7 @@ def main():
     
     # Check if we're continuing training
     if trainer.load_latest_checkpoint():
-        if trainer.global_step > 5000:
+        if trainer.global_step >= 5000:
             logger.info("Continuing training for 50 more steps")
             trainer.train(target_steps=5050)
         else:

@@ -4,19 +4,22 @@ This repository contains an implementation of SmolLM2-135M, a lightweight langua
 
 ## Model Architecture
 
-SmolLM2-135M is a compact language model with:
-- 135M parameters
-- 30 layers
+SmolLM2-135M architecture features:
+- 30 transformer layers
 - 576 hidden size
 - 9 attention heads
 - 3 key/value heads (grouped-query attention)
 - 1536 intermediate size
 - 49152 vocabulary size
+- SiLU activation
+- RMSNorm with eps=1e-5
+
+Note: Our implementation maintains the exact architecture but results in ~162.8M parameters due to differences in attention mechanism implementation.
 
 ## Features
 
 - Full implementation of Llama architecture with grouped-query attention
-- Mixed precision training (float16)
+- Detailed parameter analysis and breakdown
 - Checkpoint saving and loading
 - Text generation capabilities
 - Training progress monitoring
@@ -28,7 +31,7 @@ SmolLM2-135M is a compact language model with:
 - `train.py`: Training loop and utilities
 - `input.txt`: Training data (Shakespeare text)
 - `config_smollm2_135M.yaml`: Model configuration
-- `model_architecture_smollm2_135M.txt`: Detailed model architecture
+- `model_architecture_smollm2_135M.txt`: Reference model architecture
 
 ## Training
 
@@ -43,17 +46,17 @@ python train.py
 ```
 
 The training:
-1. Runs for 5000 steps initially
-2. Saves checkpoints every 50 steps
-3. Generates sample text every 500 steps
-4. Keeps last 3 checkpoints
-5. Can continue training from checkpoints
+1. Prints detailed model architecture and parameter analysis
+2. Runs for 5000 steps
+3. Saves checkpoints every 50 steps
+4. Generates sample text every 500 steps
+5. Keeps last 3 checkpoints
+6. Can continue training from checkpoints
 
 ### Training Parameters
 - Batch size: 4
 - Learning rate: 3e-3
 - Max sequence length: 512
-- Mixed precision: Enabled (float16)
 - Optimizer: AdamW (β1=0.9, β2=0.95)
 
 ## Model Features
@@ -87,7 +90,7 @@ Checkpoints are saved:
 from model import create_model
 from transformers import AutoTokenizer
 
-# Create model
+# Create model and see parameter analysis
 model = create_model(seed=42)
 tokenizer = AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M")
 
@@ -106,15 +109,14 @@ trainer = ModelTrainer(
 )
 
 # Start training
-trainer.train(num_epochs=1000, target_steps=5000)
+trainer.train(target_steps=5000)
 ```
 
 ## Training Continuation
 
 To continue training from a checkpoint:
 ```python
-# Will automatically load latest checkpoint
-trainer.train(num_epochs=1000, target_steps=5050)  # For 50 more steps
+trainer.train(target_steps=5050)  # For 50 more steps
 ```
 
 ## Model Output Example
